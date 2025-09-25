@@ -91,10 +91,10 @@ pip install -r requirements.txt
 The database connection uses the following environment variables from `.env`:
 
 ```env
-DB_HOST=pp-lb.bazarchic.com
-DB_USER=bazar
-DB_PASSWORD=Tz#54!g
-DB_NAME=bazarshop_base
+DB_HOST=
+DB_USER=
+DB_PASSWORD=
+DB_NAME=
 DB_PORT=3306
 ```
 
