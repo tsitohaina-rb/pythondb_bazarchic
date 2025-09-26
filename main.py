@@ -18,9 +18,27 @@ import os
 import pandas as pd
 from datetime import datetime
 import sys
+import re
+from html import unescape
 
 # Load environment variables
 load_dotenv()
+
+def clean_html(text):
+    """Remove HTML tags and decode HTML entities from text"""
+    if not text or text.strip() == '':
+        return ''
+    
+    # Remove HTML tags
+    clean_text = re.sub(r'<[^>]+>', '', str(text))
+    
+    # Decode HTML entities (like &amp;, &lt;, &gt;, etc.)
+    clean_text = unescape(clean_text)
+    
+    # Clean up extra whitespace
+    clean_text = ' '.join(clean_text.split())
+    
+    return clean_text.strip()
 
 class BazarchicDB:
     """Bazarchic Database Connection and Operations"""
@@ -175,6 +193,11 @@ class BazarchicDB:
                     break
                 
                 df = pd.DataFrame(products)
+                
+                # Clean HTML from description fields if they exist
+                for col in df.columns:
+                    if 'description' in col.lower():
+                        df[col] = df[col].apply(clean_html)
                 
                 if first_batch:
                     df.to_csv(filename, index=False, encoding='utf-8')
@@ -399,89 +422,128 @@ class BazarchicDB:
             
             cursor.close()
             
-            if products:
-                # Create DataFrame with exact column order
-                df = pd.DataFrame(products)
-                
-                # Generate filename
-                if ean_filter:
-                    filename = f"comprehensive_ean_products_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-                else:
-                    filename = f"comprehensive_products_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-                
-                # Export to CSV with UTF-8 encoding and custom header format
-                with open(filename, 'w', encoding='utf-8', newline='') as f:
-                    import csv
-                    writer = csv.writer(f)
-                    
-                    # Write the display headers (first row)
-                    display_headers = [
-                        'Category', 'Shop sku', 'Titre du produit', 'Marque', 'Description Longue',
-                        'EAN', 'Couleur commercial', 'Image principale', 'image secondaire',
-                        'Image 3', 'Image 4', 'Image 5', 'Image 6', 'Image 7', 'Image 8',
-                        'Image 9', 'Image_10', 'Produit Parent (identification)', 'Id de rattachement',
-                        'Composition 1', 'Composition 2', 'Composition 3', 'Conseil d\'entretien',
-                        'Capacité', 'Dimensions', 'DLC (Date limite de consommation)',
-                        'DDM (Date de durabilité minimale)', 'Ingrédients', 'Poids net du produit',
-                        'Motif', 'Garantie commerciale', 'Eco-responsable', 'Métrage ? (oui /non)',
-                        'Produit ou Service', 'BZC ( à ne pas remplir )', 'Poids du colis (kg)', 'Taille unique'
-                    ]
-                    writer.writerow(display_headers)
-                    
-                    # Write the technical field mappings (second row)
-                    technical_mappings = [
-                        'family_id', 'shop_sku', 'name', 'brand_id', 'description',
-                        'ean', 'technical_spec_1_color', 'media_1', 'media_2',
-                        'media_3', 'media_4', 'media_5', 'media_6', 'media_7', 'media_8',
-                        'media_9', 'media_10', 'is_parent', 'variant_group_code',
-                        'technical_spec_1_composition', 'technical_spec_2_composition', 'technical_spec_3_composition', 'technical_spec_1_care_advice',
-                        'technical_spec_1_capacity', 'technical_spec_1_dimensions', 'technical_spec_1_expiration_date',
-                        'technical_spec_1_durability_date', 'technical_spec_1_ingredients', 'technical_spec_1_net_weight',
-                        'technical_spec_1_pattern', 'technical_spec_1_commercial_warranty', 'technical_spec_1_eco_responsibility', 'is_cloth',
-                        'is_virtual', 'is_bzc', 'weight', 'size_id'
-                    ]
-                    writer.writerow(technical_mappings)
-                    
-                    # Write the actual data rows
-                    for _, row in df.iterrows():
-                        data_row = [
-                            row['Category'], row['Shop sku'], row['Titre du produit'], row['Marque'], row['Description Longue'],
-                            row['EAN'], row['Couleur commercial'], row['Image principale'], row['image secondaire'],
-                            row['Image 3'], row['Image 4'], row['Image 5'], row['Image 6'], row['Image 7'], row['Image 8'],
-                            row['Image 9'], row['Image_10'], row['Produit Parent (identification)'], row['Id de rattachement'],
-                            row['Composition 1'], row['Composition 2'], row['Composition 3'], row['Conseil d\'entretien'],
-                            row['Capacité'], row['Dimensions'], row['DLC (Date limite de consommation)'],
-                            row['DDM (Date de durabilité minimale)'], row['Ingrédients'], row['Poids net du produit'],
-                            row['Motif'], row['Garantie commerciale'], row['Eco-responsable'], row['Métrage ? (oui /non)'],
-                            row['Produit ou Service'], row['BZC ( à ne pas remplir )'], row['Poids du colis (kg)'], row['Taille unique']
-                        ]
-                        writer.writerow(data_row)
-                
-                file_size = os.path.getsize(filename) / 1024 / 1024
-                
-                print(f"\n✅ Comprehensive CSV export completed!")
-                print("=" * 60)
-                print(f"📁 File: {filename}")
-                print(f"📊 Products exported: {total_exported:,}")
-                print(f"💾 File size: {file_size:.2f} MB") 
-                print(f"📋 Columns: {len(df.columns)} (exactly as requested)")
-                
-                # Show first few sample products
-                if total_exported > 0:
-                    print(f"\n📦 Sample exported data:")
-                    print("-" * 80)
-                    for i, (_, row) in enumerate(df.head(3).iterrows(), 1):
-                        print(f"Product {i}:")
-                        print(f"  Category: {row['Category']}")
-                        print(f"  Shop sku: {row['Shop sku']}")  
-                        print(f"  Title: {row['Titre du produit'][:50]}...")
-                        print(f"  EAN: {row['EAN']}")
-                        print()
-                
-                return filename, total_exported
+            # Define headers and mappings
+            display_headers = [
+                'Category', 'Shop sku', 'Titre du produit', 'Marque', 'Description Longue',
+                'EAN', 'Couleur commercial', 'Image principale', 'image secondaire',
+                'Image 3', 'Image 4', 'Image 5', 'Image 6', 'Image 7', 'Image 8',
+                'Image 9', 'Image_10', 'Produit Parent (identification)', 'Id de rattachement',
+                'Composition 1', 'Composition 2', 'Composition 3', 'Conseil d\'entretien',
+                'Capacité', 'Dimensions', 'DLC (Date limite de consommation)',
+                'DDM (Date de durabilité minimale)', 'Ingrédients', 'Poids net du produit',
+                'Motif', 'Garantie commerciale', 'Eco-responsable', 'Métrage ? (oui /non)',
+                'Produit ou Service', 'BZC ( à ne pas remplir )', 'Poids du colis (kg)', 'Taille unique'
+            ]
+            
+            technical_mappings = [
+                'family_id', 'shop_sku', 'name', 'brand_id', 'description',
+                'ean', 'technical_spec_1_color', 'media_1', 'media_2',
+                'media_3', 'media_4', 'media_5', 'media_6', 'media_7', 'media_8',
+                'media_9', 'media_10', 'is_parent', 'variant_group_code',
+                'technical_spec_1_composition', 'technical_spec_2_composition', 'technical_spec_3_composition', 'technical_spec_1_care_advice',
+                'technical_spec_1_capacity', 'technical_spec_1_dimensions', 'technical_spec_1_expiration_date',
+                'technical_spec_1_durability_date', 'technical_spec_1_ingredients', 'technical_spec_1_net_weight',
+                'technical_spec_1_pattern', 'technical_spec_1_commercial_warranty', 'technical_spec_1_eco_responsibility', 'is_cloth',
+                'is_virtual', 'is_bzc', 'weight', 'size_id'
+            ]
+            
+            # Generate filename
+            if ean_filter:
+                filename = f"comprehensive_ean_products_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
             else:
-                print("❌ No products found")
-                return None, 0
+                filename = f"comprehensive_products_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            
+            # Export to CSV with UTF-8 encoding and custom header format
+            with open(filename, 'w', encoding='utf-8', newline='') as f:
+                import csv
+                writer = csv.writer(f)
+                
+                # Write the display headers (first row)
+                writer.writerow(display_headers)
+                
+                # Write the technical field mappings (second row)
+                writer.writerow(technical_mappings)
+                
+                # Handle EAN filter case - write row for each searched EAN
+                if ean_filter and clean_eans:
+                    # Map found products by EAN
+                    found_by_ean = {}
+                    for prod in products:
+                        ean_key = prod.get('EAN', '')
+                        if ean_key not in found_by_ean:
+                            found_by_ean[ean_key] = []
+                        found_by_ean[ean_key].append(prod)
+                    
+                    # Write row for each searched EAN
+                    for ean in clean_eans:
+                        if ean in found_by_ean:
+                            # Found products for this EAN
+                            for prod in found_by_ean[ean]:
+                                # Clean HTML from description
+                                desc_cleaned = clean_html(prod.get('Description Longue', ''))
+                                
+                                data_row = [
+                                    prod.get('Category', ''), prod.get('Shop sku', ''), prod.get('Titre du produit', ''), 
+                                    prod.get('Marque', ''), desc_cleaned, prod.get('EAN', ''), 
+                                    prod.get('Couleur commercial', ''), prod.get('Image principale', ''), 
+                                    prod.get('image secondaire', ''), prod.get('Image 3', ''), prod.get('Image 4', ''), 
+                                    prod.get('Image 5', ''), prod.get('Image 6', ''), prod.get('Image 7', ''), 
+                                    prod.get('Image 8', ''), prod.get('Image 9', ''), prod.get('Image_10', ''), 
+                                    prod.get('Produit Parent (identification)', ''), prod.get('Id de rattachement', ''),
+                                    prod.get('Composition 1', ''), prod.get('Composition 2', ''), prod.get('Composition 3', ''),
+                                    prod.get('Conseil d\'entretien', ''), prod.get('Capacité', ''), prod.get('Dimensions', ''),
+                                    prod.get('DLC (Date limite de consommation)', ''), prod.get('DDM (Date de durabilité minimale)', ''),
+                                    prod.get('Ingrédients', ''), prod.get('Poids net du produit', ''), prod.get('Motif', ''),
+                                    prod.get('Garantie commerciale', ''), prod.get('Eco-responsable', ''), prod.get('Métrage ? (oui /non)', ''),
+                                    prod.get('Produit ou Service', ''), prod.get('BZC ( à ne pas remplir )', ''), 
+                                    prod.get('Poids du colis (kg)', ''), prod.get('Taille unique', '')
+                                ]
+                                writer.writerow(data_row)
+                        else:
+                            # No product found for this EAN - write empty row with only EAN
+                            empty_row = ['' for _ in display_headers]
+                            empty_row[display_headers.index('EAN')] = ean  # Set EAN in the correct position
+                            writer.writerow(empty_row)
+                
+                else:
+                    # Regular export (no EAN filter) or found products
+                    if products:
+                        for prod in products:
+                            # Clean HTML from description
+                            desc_cleaned = clean_html(prod.get('Description Longue', ''))
+                            
+                            data_row = [
+                                prod.get('Category', ''), prod.get('Shop sku', ''), prod.get('Titre du produit', ''), 
+                                prod.get('Marque', ''), desc_cleaned, prod.get('EAN', ''), 
+                                prod.get('Couleur commercial', ''), prod.get('Image principale', ''), 
+                                prod.get('image secondaire', ''), prod.get('Image 3', ''), prod.get('Image 4', ''), 
+                                prod.get('Image 5', ''), prod.get('Image 6', ''), prod.get('Image 7', ''), 
+                                prod.get('Image 8', ''), prod.get('Image 9', ''), prod.get('Image_10', ''), 
+                                prod.get('Produit Parent (identification)', ''), prod.get('Id de rattachement', ''),
+                                prod.get('Composition 1', ''), prod.get('Composition 2', ''), prod.get('Composition 3', ''),
+                                prod.get('Conseil d\'entretien', ''), prod.get('Capacité', ''), prod.get('Dimensions', ''),
+                                prod.get('DLC (Date limite de consommation)', ''), prod.get('DDM (Date de durabilité minimale)', ''),
+                                prod.get('Ingrédients', ''), prod.get('Poids net du produit', ''), prod.get('Motif', ''),
+                                prod.get('Garantie commerciale', ''), prod.get('Eco-responsable', ''), prod.get('Métrage ? (oui /non)', ''),
+                                prod.get('Produit ou Service', ''), prod.get('BZC ( à ne pas remplir )', ''), 
+                                prod.get('Poids du colis (kg)', ''), prod.get('Taille unique', '')
+                            ]
+                            writer.writerow(data_row)
+            
+            file_size = os.path.getsize(filename) / 1024 / 1024
+            
+            print(f"\n✅ Comprehensive CSV export completed!")
+            print("=" * 60)
+            print(f"📁 File: {filename}")
+            if ean_filter and clean_eans:
+                print(f"📊 Searched EANs: {len(clean_eans)}")
+                print(f"📊 Products found: {total_exported:,}")
+            else:
+                print(f"📊 Products exported: {total_exported:,}")
+            print(f"💾 File size: {file_size:.2f} MB") 
+            print(f"📋 Columns: {len(display_headers)} (exactly as requested)")
+            
+            return filename, total_exported if not ean_filter else len(clean_eans)
                 
         except Exception as e:
             print(f"❌ Export error: {e}")
@@ -550,6 +612,12 @@ class BazarchicDB:
                 # Export to CSV
                 filename = f"ean_search_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
                 df = pd.DataFrame(unique_products)
+                
+                # Clean HTML from description fields if they exist
+                for col in df.columns:
+                    if 'description' in col.lower():
+                        df[col] = df[col].apply(clean_html)
+                
                 df.to_csv(filename, index=False, encoding='utf-8')
                 
                 file_size = os.path.getsize(filename) / 1024

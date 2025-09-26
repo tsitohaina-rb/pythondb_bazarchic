@@ -13,12 +13,12 @@ Simple tool to work with the Bazarchic MySQL database for product management.
 
 ```bash
 # 1. Create virtual environment
-python3 -m venv venv
+python3 -m venv .venv
 
 # 2. Activate virtual environment
-source venv/bin/activate  # Linux/Mac
+source .venv/bin/activate  # Linux/Mac
 # or
-venv\Scripts\activate     # Windows
+.venv\Scripts\activate     # Windows
 
 # 3. Install dependencies
 pip install -r requirements.txt
@@ -29,7 +29,7 @@ pip install -r requirements.txt
 Run the main application:
 
 ```bash
-source venv/bin/activate
+source .venv/bin/activate
 python main.py
 ```
 
