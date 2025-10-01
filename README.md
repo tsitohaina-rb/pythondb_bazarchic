@@ -69,22 +69,406 @@ Try these EAN codes for testing:
 - python-dotenv - Environment variables
 - pandas - CSV export functionality
 
-## Setup
+## 🛒 Bazarchic Products Database Tool
 
-### 1. Virtual Environment
+**Advanced Python tool for Bazarchic MySQL database operations with comprehensive product data extraction and CSV export capabilities.**
+
+## 📋 Table of Contents
+
+- [Features](#-features)
+- [Quick Start](#-quick-start)
+- [Installation](#-installation)
+- [Configuration](#-configuration)
+- [Usage](#️-usage)
+- [Directory Structure](#-directory-structure)
+- [Database Schema](#-database-schema)
+- [CSV Export Formats](#-csv-export-formats)
+- [Examples](#-examples)
+- [Troubleshooting](#-troubleshooting)
+- [Technical Details](#-technical-details)
+
+## 🚀 Features
+
+### Core Database Operations
+
+- **Database Analysis**: List all 870+ tables and analyze structure
+- **Product Information**: Detailed product table analysis with field mapping
+- **Comprehensive Exports**: Multiple CSV export formats with technical specifications
+
+### Advanced Data Extraction
+
+- **Technical Specifications**: Extract capacity, expiration dates, durability dates, and ingredients
+- **Deep Database Relationships**: Uses proper JOIN queries across multiple tables
+- **Multi-language Support**: Handles French, English, German, Dutch, Spanish, and Italian data
+
+### Export Capabilities
+
+- **Standard Exports**: All products or filtered subsets
+- **Comprehensive Format**: 37-column CSV with complete technical specifications
+- **EAN Search**: Find and export products by barcode
+- **Batch Processing**: Memory-efficient processing for large datasets
+
+### Data Sources
+
+- **181,393 products** with capacity data
+- **68,081 products** with DDM (Date de durabilité minimale)
+- **19,409 products** with DLC (Date limite de consommation)
+- **Unique ingredients** per product via database relationships
+
+## 🚀 Quick Start
+
+```bash
+# 1. Clone and setup
+git clone <repository-url>
+cd pythondb_bazarchic
+
+# 2. Create virtual environment
+python3 -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+# or .venv\Scripts\activate  # Windows
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Configure database (see Configuration section)
+# Edit .env file with your database credentials
+
+# 5. Run the application
+python main.py
+```
+
+## 📦 Installation
+
+### Prerequisites
+
+- **Python 3.8+**
+- **MySQL Database Access** (bazarshop_base)
+- **Network Access** to pp-lb.bazarchic.com
+
+### Virtual Environment Setup
 
 ```bash
 # Create virtual environment
-python3 -m venv venv
+python3 -m venv .venv
 
 # Activate virtual environment
-source venv/bin/activate  # Linux/Mac
-# or
-venv\Scripts\activate     # Windows
+source .venv/bin/activate  # Linux/Mac
+.venv\Scripts\activate     # Windows
 
 # Install dependencies
 pip install -r requirements.txt
 ```
+
+### Dependencies
+
+The project uses these Python packages:
+
+```
+mysql-connector-python==9.4.0  # MySQL database connector
+python-dotenv==1.1.1           # Environment variable management
+pandas==2.3.2                  # Data manipulation and CSV export
+```
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+Create a `.env` file in the project root:
+
+```env
+DB_HOST=pp-lb.bazarchic.com
+DB_USER=your_username
+DB_PASSWORD=your_password
+DB_NAME=bazarshop_base
+DB_PORT=3306
+```
+
+### Database Connection
+
+The tool connects to the Bazarchic MySQL database via ProxySQL. Ensure you have:
+
+- Valid database credentials
+- Network access to the database server
+- Appropriate firewall/VPN configuration if required
+
+## ▶️ Usage
+
+### Interactive Menu
+
+Run the main application to access the interactive menu:
+
+```bash
+source .venv/bin/activate
+python main.py
+```
+
+### Menu Options
+
+```
+📋 Available Operations:
+1. List all tables in the database
+2. Analyze products table (fields and structure)
+3. Export all products to CSV (original format)
+4. Export sample products to CSV (10,000 products, original format)
+5. Search products by EAN and save to CSV
+6. 🎯 Export with COMPREHENSIVE HEADERS (your exact format)
+7. 🎯 Export 10,000 products with COMPREHENSIVE HEADERS
+8. 🎯 Search EAN with COMPREHENSIVE HEADERS
+0. Exit
+```
+
+### Key Operations
+
+#### 1. Database Analysis
+
+- **Option 1**: Lists all 870+ database tables
+- **Option 2**: Detailed analysis of the products table structure
+
+#### 2. Standard CSV Exports
+
+- **Option 3**: Full database export (8M+ products - ⚠️ Large file!)
+- **Option 4**: Sample export (10,000 products)
+- **Option 5**: EAN-based search and export
+
+#### 3. Comprehensive CSV Exports (Recommended)
+
+- **Option 6**: Full comprehensive export with 37 technical specification columns
+- **Option 7**: Sample comprehensive export (10,000 products)
+- **Option 8**: EAN search with comprehensive format
+
+## 📁 Directory Structure
+
+```
+pythondb_bazarchic/
+├── .env                           # Database configuration (create this)
+├── .gitignore                     # Git ignore rules
+├── .venv/                         # Python virtual environment
+├── README.md                      # This documentation
+├── requirements.txt               # Python dependencies
+├── main.py                        # Main application (🚀 START HERE)
+├── __pycache__/                   # Python cache (auto-generated)
+├── *.csv                          # Generated CSV exports
+└── eans.txt                       # Sample EAN codes for testing
+```
+
+### Core Files
+
+| File               | Purpose              | Usage                                          |
+| ------------------ | -------------------- | ---------------------------------------------- |
+| `main.py`          | **Main application** | Run with `python main.py`                      |
+| `.env`             | Database credentials | Configure before first use                     |
+| `requirements.txt` | Python dependencies  | Install with `pip install -r requirements.txt` |
+| `README.md`        | Documentation        | This file                                      |
+
+## 🗄️ Database Schema
+
+### Key Tables Used
+
+The application intelligently queries multiple related tables:
+
+```sql
+-- Main product tables
+produits                        -- Base product information
+produits_group                  -- Product group details
+produits_marque                 -- Brand information
+produits_familles              -- Product families
+produits_gallery               -- Product images
+
+-- Technical specifications (Advanced Feature)
+produits_group_caracteristiques -- Product characteristics
+caracteristiques               -- Characteristic definitions
+dictionnaires_langues          -- Multi-language values
+
+-- Category and classification
+categories                     -- Product categories
+```
+
+### Database Statistics
+
+- **Total Tables**: 870+
+- **Total Products**: 8,324,637
+- **Products with EAN**: 3,145,079 (37.8%)
+- **Technical Specs Available**: 181,393+ products
+- **Multi-language Support**: 6 languages
+
+## 📊 CSV Export Formats
+
+### Standard Format (Options 3-5)
+
+Basic product export with 26 core fields including:
+
+- Product ID, EAN, Reference, Prices
+- Descriptions, Status, Weight
+- Keywords, Timestamps, etc.
+
+### Comprehensive Format (Options 6-8) ⭐ **Recommended**
+
+Advanced 37-column format with complete technical specifications:
+
+| Column                            | Technical Field                    | Data Source              |
+| --------------------------------- | ---------------------------------- | ------------------------ |
+| Capacité                          | `technical_spec_1_capacity`        | Database characteristics |
+| DLC (Date limite de consommation) | `technical_spec_1_expiration_date` | Database characteristics |
+| DDM (Date de durabilité minimale) | `technical_spec_1_durability_date` | Database characteristics |
+| Ingrédients                       | `technical_spec_1_ingredients`     | Database characteristics |
+| Images (10 columns)               | `media_1` to `media_10`            | CDN URLs                 |
+| Brand, Category, Description      | Various                            | Proper table JOINs       |
+
+## 💡 Examples
+
+### Example 1: Quick Product Analysis
+
+```bash
+python main.py
+# Choose option 2: Analyze products table
+```
+
+Output:
+
+```
+📊 Products Table Analysis:
+==================================================
+Total products: 8,324,637
+Products with EAN: 3,145,079 (37.8%)
+Total fields: 26
+```
+
+### Example 2: EAN Search with Comprehensive Data
+
+```bash
+python main.py
+# Choose option 8: Search EAN with COMPREHENSIVE HEADERS
+# Enter EAN: 7290015070379
+```
+
+Generated CSV includes:
+
+- **Capacity**: "120 ml" (from database)
+- **Ingredients**: Full detailed ingredient list
+- **Images**: 10 high-resolution product images
+- **Brand**: "Bio Spa"
+- **Complete technical specifications**
+
+### Example 3: Sample Export for Testing
+
+```bash
+python main.py
+# Choose option 7: Export 10,000 products with COMPREHENSIVE HEADERS
+```
+
+Perfect for:
+
+- Testing the format
+- Data analysis samples
+- Quick validation
+
+### Example 4: Multiple EAN Search
+
+```bash
+python main.py
+# Choose option 8, then option b (multiple EANs)
+# Enter: 7290015070379,7640112441273,3760128680863
+```
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+#### Connection Problems
+
+```bash
+❌ Database connection failed: Access denied
+```
+
+**Solution**: Check your `.env` file credentials
+
+#### Large File Issues
+
+```bash
+⚠️ Memory error during export
+```
+
+**Solution**: Use sample exports (options 4 or 7) or increase batch size
+
+#### Missing Data
+
+```bash
+Empty columns in CSV export
+```
+
+**Solution**: Use comprehensive format (options 6-8) for complete data
+
+### Debug Commands
+
+Check your environment:
+
+```bash
+# Test database connection
+python -c "from main import BazarchicDB; db = BazarchicDB(); print('✅ Connection OK' if db.connection else '❌ Connection Failed')"
+
+# Verify environment variables
+python -c "from dotenv import load_dotenv; import os; load_dotenv(); print(f'Host: {os.getenv("DB_HOST")}')"
+```
+
+### Performance Tips
+
+1. **Use sample exports** for testing (options 4, 7)
+2. **Batch processing** is automatic for large exports
+3. **EAN searches** are fastest for specific products
+4. **Comprehensive format** provides the most complete data
+
+## 🔬 Technical Details
+
+### Database Extraction Methods
+
+The application uses advanced SQL JOINs to extract technical specifications:
+
+```python
+# Capacity extraction
+get_capacity_from_product()    # Uses produits_group_caracteristiques
+get_dlc_from_product()         # Extracts expiration dates
+get_ddm_from_product()         # Extracts durability dates
+get_ingredients_from_product() # Extracts ingredient lists
+```
+
+### Multi-language Support
+
+Technical specifications are available in:
+
+- 🇫🇷 French (Contenance, DDM, Ingrédients)
+- 🇬🇧 English (Capacity, DDM, Ingredients)
+- 🇩🇪 German (Kapazität, Mindesthaltbarkeitsdatum)
+- 🇳🇱 Dutch (Capaciteit, Minimale houdbaarheidsdatum)
+- 🇪🇸 Spanish (Capacidad, Fecha de durabilidad)
+- 🇮🇹 Italian (Capacità, Data minima di durabilità)
+
+### Performance Specifications
+
+| Operation           | Typical Time  | File Size |
+| ------------------- | ------------- | --------- |
+| Sample Export (10K) | 30-60 seconds | 1-5 MB    |
+| EAN Search          | 5-15 seconds  | 0.1-1 MB  |
+| Full Export (8M+)   | 2-6 hours     | 1-3 GB    |
+| Database Analysis   | 10-30 seconds | N/A       |
+
+### Memory Management
+
+- **Batch Processing**: 10,000-50,000 products per batch
+- **Progress Tracking**: Real-time progress for large operations
+- **Memory Efficient**: Streaming processing prevents memory overflow
+
+## 📞 Support
+
+For issues or questions:
+
+1. **Check this README** for common solutions
+2. **Test with sample exports** before large operations
+3. **Use comprehensive format** (options 6-8) for complete data
+4. **Check database connectivity** if experiencing connection issues
+
+---
+
+**Version**: 2.0 | **Last Updated**: October 2025 | **Database**: bazarshop_base
 
 ### 2. Environment Variables
 

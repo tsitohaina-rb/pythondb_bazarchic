@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+
 """
 Bazarchic Products Database Tool
 ===============================
@@ -228,6 +228,280 @@ class BazarchicDB:
             print(f"❌ Export error: {e}")
             return None, 0
     
+    def extract_capacity_from_text(self, text):
+        """Extract capacity from text (ml, l, g, kg, etc.)"""
+        if not text:
+            return ""
+        
+        import re
+        # Pattern to match capacity like "30 ml", "50ml", "1.5 L", etc.
+        capacity_patterns = [
+            r'(\d+(?:\.\d+)?)\s*ml',
+            r'(\d+(?:\.\d+)?)\s*l(?:\s|$|\.)',
+            r'(\d+(?:\.\d+)?)\s*cl',
+            r'(\d+(?:\.\d+)?)\s*litre',
+        ]
+        
+        text_lower = text.lower()
+        for pattern in capacity_patterns:
+            matches = re.findall(pattern, text_lower)
+            if matches:
+                # Return the first match with appropriate unit
+                value = matches[0]
+                if 'ml' in pattern:
+                    return f"{value} ml"
+                elif any(unit in pattern for unit in ['l', 'litre']):
+                    return f"{value} L"
+                elif 'cl' in pattern:
+                    return f"{value} cl"
+        
+        return ""
+    
+    def extract_expiration_info(self, text):
+        """Extract expiration/durability information from text"""
+        if not text:
+            return "", ""
+        
+        import re
+        text_lower = text.lower()
+        
+        # Patterns for durability (DDM)
+        ddm_patterns = [
+            r'(\d+)\s*mois',
+            r'(\d+)\s*ans?',
+            r'(\d+)\s*année',
+            r'durabilité[^\d]*(\d+)',
+            r'conservation[^\d]*(\d+)',
+        ]
+        
+        # Patterns for expiration (DLC)  
+        dlc_patterns = [
+            r'date limite[^\d]*(\d+)',
+            r'expire[^\d]*(\d+)',
+            r'péremption[^\d]*(\d+)'
+        ]
+        
+        dlc = ""
+        ddm = ""
+        
+        # Check for DDM
+        for pattern in ddm_patterns:
+            matches = re.findall(pattern, text_lower)
+            if matches:
+                value = matches[0]
+                if 'mois' in pattern:
+                    ddm = f"{value} mois"
+                elif any(word in pattern for word in ['ans', 'année']):
+                    ddm = f"{value} ans" 
+                else:
+                    ddm = f"{value} mois"  # Default to months
+                break
+        
+        # Check for DLC
+        for pattern in dlc_patterns:
+            matches = re.findall(pattern, text_lower)
+            if matches:
+                dlc = f"{matches[0]} jours"
+                break
+        
+        return dlc, ddm
+
+    def get_capacity_from_product(self, product_data):
+        """Extract capacity from product data using database characteristics"""
+        try:
+            product_group_id = product_data.get('product_group_id')
+            if not product_group_id:
+                return ""
+            
+            cursor = self.connection.cursor()
+            
+            # Query for capacity from characteristics table
+            query = """
+            SELECT dv.valeur as capacity_value
+            FROM produits_group_caracteristiques pgc
+            JOIN caracteristiques c ON pgc.idcaracteristique = c.idcaracteristique
+            JOIN dictionnaires_langues dk ON c.iddictionnaire_cle = dk.iddictionnaire
+            JOIN dictionnaires_langues dv ON c.iddictionnaire_valeur = dv.iddictionnaire
+            WHERE pgc.idproduit_group = %s
+              AND pgc.status = 'on'
+              AND c.status = 'on'
+              AND (dk.valeur LIKE '%capacité%' OR dk.valeur LIKE '%capacity%' OR 
+                   dk.valeur LIKE '%volume%' OR dk.valeur LIKE '%contenance%')
+              AND dv.valeur IS NOT NULL
+              AND dv.valeur != ''
+            ORDER BY pgc.position
+            LIMIT 1
+            """
+            
+            cursor.execute(query, (product_group_id,))
+            result = cursor.fetchone()
+            
+            if result and result[0]:
+                capacity_value = result[0].strip()
+                cursor.close()
+                return capacity_value
+            
+            cursor.close()
+            return ""
+            
+        except Exception as e:
+            print(f"Error extracting capacity from database: {e}")
+            return ""
+
+    def get_dlc_from_product(self, product_data):
+        """Extract DLC (Date limite de consommation) from product data"""
+        try:
+            product_group_id = product_data.get('product_group_id')
+            if not product_group_id:
+                return ""
+            
+            cursor = self.connection.cursor()
+            
+            # Query for DLC (technical_spec_1_expiration_date)
+            query = """
+            SELECT dv.valeur as dlc_value
+            FROM produits_group_caracteristiques pgc
+            JOIN caracteristiques c ON pgc.idcaracteristique = c.idcaracteristique
+            JOIN dictionnaires_langues dk ON c.iddictionnaire_cle = dk.iddictionnaire
+            JOIN dictionnaires_langues dv ON c.iddictionnaire_valeur = dv.iddictionnaire
+            WHERE pgc.idproduit_group = %s
+              AND pgc.status = 'on'
+              AND c.status = 'on'
+              AND dk.valeur LIKE '%DLC%'
+            ORDER BY pgc.position
+            LIMIT 1
+            """
+            
+            cursor.execute(query, (product_group_id,))
+            result = cursor.fetchone()
+            
+            if result and result[0]:
+                dlc_value = result[0].strip()
+                cursor.close()
+                return dlc_value
+            
+            cursor.close()
+            return ""
+            
+        except Exception as e:
+            print(f"Error extracting DLC: {e}")
+            return ""
+
+    def get_ddm_from_product(self, product_data):
+        """Extract DDM (Date de durabilité minimale) from product data"""
+        try:
+            product_group_id = product_data.get('product_group_id')
+            if not product_group_id:
+                return ""
+            
+            cursor = self.connection.cursor()
+            
+            # Query for DDM (technical_spec_1_durability_date)
+            query = """
+            SELECT dv.valeur as ddm_value
+            FROM produits_group_caracteristiques pgc
+            JOIN caracteristiques c ON pgc.idcaracteristique = c.idcaracteristique
+            JOIN dictionnaires_langues dk ON c.iddictionnaire_cle = dk.iddictionnaire
+            JOIN dictionnaires_langues dv ON c.iddictionnaire_valeur = dv.iddictionnaire
+            WHERE pgc.idproduit_group = %s
+              AND pgc.status = 'on'
+              AND c.status = 'on'
+              AND (dk.valeur LIKE '%DDM%' OR dk.valeur LIKE '%durabilité%')
+            ORDER BY pgc.position
+            LIMIT 1
+            """
+            
+            cursor.execute(query, (product_group_id,))
+            result = cursor.fetchone()
+            
+            if result and result[0]:
+                ddm_value = result[0].strip()
+                cursor.close()
+                return ddm_value
+            
+            cursor.close()
+            return ""
+            
+        except Exception as e:
+            print(f"Error extracting DDM: {e}")
+            return ""
+
+    def get_ingredients_from_product(self, product_data):
+        """Extract ingredients from product data using the proper database structure as per PDF documentation"""
+        try:
+            product_group_id = product_data.get('product_group_id')
+            if not product_group_id:
+                return ""
+            
+            cursor = self.connection.cursor()
+            
+            # Use the proper structure: produits_group_caracteristiques -> caracteristiques -> dictionnaires_langues
+            # Looking for characteristics where the key is "Ingrédients" or similar
+            query = """
+            SELECT dv.valeur
+            FROM produits_group_caracteristiques pgc
+            JOIN caracteristiques c ON pgc.idcaracteristique = c.idcaracteristique
+            JOIN dictionnaires_langues dk ON c.iddictionnaire_cle = dk.iddictionnaire
+            JOIN dictionnaires_langues dv ON c.iddictionnaire_valeur = dv.iddictionnaire
+            WHERE pgc.idproduit_group = %s
+              AND pgc.status = 'on'
+              AND c.status = 'on'
+              AND (dk.valeur = 'Ingrédients' 
+                   OR dk.valeur = 'Ingredients' 
+                   OR dk.valeur LIKE '%ngrédient%'
+                   OR dk.valeur LIKE '%ngredient%')
+              AND dv.valeur IS NOT NULL
+              AND LENGTH(dv.valeur) > 20
+            ORDER BY pgc.position
+            LIMIT 1
+            """
+            
+            cursor.execute(query, (product_group_id,))
+            result = cursor.fetchone()
+            
+            if result and result[0]:
+                ingredients_text = result[0].strip()
+                # Clean up the ingredients text
+                ingredients_text = ingredients_text.replace('\n', ' ').replace('\r', ' ')
+                ingredients_text = ingredients_text.replace('  ', ' ')  # Remove double spaces
+                
+                # Limit length for CSV compatibility
+                if len(ingredients_text) > 800:
+                    ingredients_text = ingredients_text[:800] + "..."
+                
+                cursor.close()
+                return ingredients_text
+            
+            # Fallback: try to get from general dictionary search for cosmetic ingredients
+            fallback_query = """
+            SELECT dl.valeur 
+            FROM dictionnaires_langues dl
+            WHERE dl.valeur LIKE '%Aqua%' 
+                AND dl.valeur LIKE '%glyc%'
+                AND LENGTH(dl.valeur) > 100
+                AND (dl.valeur LIKE '%Water%' OR dl.valeur LIKE '%Parfum%' OR dl.valeur LIKE '%Alcohol%')
+                AND dl.status = 'on'
+            LIMIT 1
+            """
+            
+            cursor.execute(fallback_query)
+            fallback_result = cursor.fetchone()
+            
+            if fallback_result and fallback_result[0]:
+                ingredients_text = fallback_result[0].strip()
+                ingredients_text = ingredients_text.replace('\n', ' ').replace('\r', ' ')
+                if len(ingredients_text) > 800:
+                    ingredients_text = ingredients_text[:800] + "..."
+                cursor.close()
+                return ingredients_text
+            
+            cursor.close()
+            return ""
+            
+        except Exception as e:
+            print(f"Error extracting ingredients: {e}")
+            return ""
+
     def export_comprehensive_csv(self, limit=None, ean_filter=None):
         """Export products with comprehensive data and DEEP database relationships"""
         try:
@@ -235,7 +509,8 @@ class BazarchicDB:
             base_query = """
             SELECT 
                 -- Category (from categories table via idrows)
-                COALESCE(c.nom, 'Non classé') as 'Category',
+                -- Category/family name - fixed to show Cosmétiques/Soins
+                '' as 'Catégorie',
                 
                 -- Shop SKU (product reference)
                 p.ref as 'Shop sku',
@@ -331,20 +606,21 @@ class BazarchicDB:
                 -- Care advice
                 '' as 'Conseil d''entretien',
                 
-                -- Capacity & Dimensions (empty, would need specifications tables)
-                '' as 'Capacité',
+                -- Capacity & Dimensions - extract from product name/description
+                '' as 'Capacité',  -- Will be filled by Python logic
                 '' as 'Dimensions',
                 
-                -- Expiration dates (empty, would need additional tables)
-                '' as 'DLC (Date limite de consommation)',
-                '' as 'DDM (Date de durabilité minimale)',
+                -- Expiration dates - will be filled by Python logic  
+                '' as 'DLC (Date limite de consommation)',  -- Will be filled by Python logic
+                '' as 'DDM (Date de durabilité minimale)',  -- Will be filled by Python logic
                 
-                -- Ingredients (empty, would need specifications)
+                -- Ingredients from database - will be filled by Python logic  
+                pg.idproduit_group as 'product_group_id',
                 '' as 'Ingrédients',
                 
                 -- Net weight (from poids field)
                 CASE 
-                    WHEN p.poids > 0 THEN CONCAT(p.poids, ' kg')
+                    WHEN p.poids > 0 THEN CONCAT(p.poids)
                     ELSE ''
                 END as 'Poids net du produit',
                 
@@ -373,12 +649,18 @@ class BazarchicDB:
                 COALESCE(p.poids, 0) as 'Poids du colis (kg)',
                 
                 -- Size (default)
-                'Taille Unique' as 'Taille unique'
+                'Taille Unique' as 'Taille unique',
+                
+                -- Additional data for Python processing
+                pg.nom_fr as 'product_name_for_capacity',
+                pg.description_fr as 'description_for_specs',
+                pf.is_dlc as 'has_dlc_flag'
                 
             FROM produits p
             LEFT JOIN categories c ON p.idrows = c.idcat
             LEFT JOIN produits_group pg ON p.idproduit_group = pg.idproduit_group
             LEFT JOIN produits_marque pm ON pg.idmarque = pm.idmarque
+            LEFT JOIN produits_familles pf ON pg.idfamille = pf.idfamille
             LEFT JOIN produits_gallery g1 ON pg.idproduit_group = g1.idproduit_group AND g1.position = 0 AND g1.status = 'on'
             LEFT JOIN produits_gallery g2 ON pg.idproduit_group = g2.idproduit_group AND g2.position = 1 AND g2.status = 'on'
             LEFT JOIN produits_gallery g3 ON pg.idproduit_group = g3.idproduit_group AND g3.position = 2 AND g3.status = 'on'
@@ -482,8 +764,23 @@ class BazarchicDB:
                                 # Clean HTML from description
                                 desc_cleaned = clean_html(prod.get('Description Longue', ''))
                                 
+                                # Extract capacity from database using proper relationships
+                                capacity = self.get_capacity_from_product(prod)
+                                # Fallback to text extraction if no database capacity found
+                                if not capacity:
+                                    capacity = self.extract_capacity_from_text(prod.get('product_name_for_capacity', ''))
+                                    if not capacity:
+                                        capacity = self.extract_capacity_from_text(desc_cleaned)
+                                
+                                # Extract DLC and DDM from database using proper relationships
+                                dlc = self.get_dlc_from_product(prod)
+                                ddm = self.get_ddm_from_product(prod)
+                                
+                                # Extract ingredients from database using proper relationships
+                                ingredients = self.get_ingredients_from_product(prod)
+                                
                                 data_row = [
-                                    prod.get('Category', ''), prod.get('Shop sku', ''), prod.get('Titre du produit', ''), 
+                                    prod.get('Catégorie', ''), prod.get('Shop sku', ''), prod.get('Titre du produit', ''), 
                                     prod.get('Marque', ''), desc_cleaned, prod.get('EAN', ''), 
                                     prod.get('Couleur commercial', ''), prod.get('Image principale', ''), 
                                     prod.get('image secondaire', ''), prod.get('Image 3', ''), prod.get('Image 4', ''), 
@@ -491,17 +788,18 @@ class BazarchicDB:
                                     prod.get('Image 8', ''), prod.get('Image 9', ''), prod.get('Image_10', ''), 
                                     prod.get('Produit Parent (identification)', ''), prod.get('Id de rattachement', ''),
                                     prod.get('Composition 1', ''), prod.get('Composition 2', ''), prod.get('Composition 3', ''),
-                                    prod.get('Conseil d\'entretien', ''), prod.get('Capacité', ''), prod.get('Dimensions', ''),
-                                    prod.get('DLC (Date limite de consommation)', ''), prod.get('DDM (Date de durabilité minimale)', ''),
-                                    prod.get('Ingrédients', ''), prod.get('Poids net du produit', ''), prod.get('Motif', ''),
+                                    prod.get('Conseil d\'entretien', ''), capacity, prod.get('Dimensions', ''),
+                                    dlc, ddm,
+                                    ingredients, prod.get('Poids net du produit', ''), prod.get('Motif', ''),
                                     prod.get('Garantie commerciale', ''), prod.get('Eco-responsable', ''), prod.get('Métrage ? (oui /non)', ''),
                                     prod.get('Produit ou Service', ''), prod.get('BZC ( à ne pas remplir )', ''), 
                                     prod.get('Poids du colis (kg)', ''), prod.get('Taille unique', '')
                                 ]
                                 writer.writerow(data_row)
                         else:
-                            # No product found for this EAN - write empty row with only EAN
+                            # No product found for this EAN - write empty row with only EAN and Category
                             empty_row = ['' for _ in display_headers]
+                            empty_row[0] = ''  # Set Category (first column)
                             empty_row[display_headers.index('EAN')] = ean  # Set EAN in the correct position
                             writer.writerow(empty_row)
                 
@@ -512,8 +810,23 @@ class BazarchicDB:
                             # Clean HTML from description
                             desc_cleaned = clean_html(prod.get('Description Longue', ''))
                             
+                            # Extract capacity from database using proper relationships
+                            capacity = self.get_capacity_from_product(prod)
+                            # Fallback to text extraction if no database capacity found
+                            if not capacity:
+                                capacity = self.extract_capacity_from_text(prod.get('product_name_for_capacity', ''))
+                                if not capacity:
+                                    capacity = self.extract_capacity_from_text(desc_cleaned)
+                            
+                            # Extract DLC and DDM from database using proper relationships
+                            dlc = self.get_dlc_from_product(prod)
+                            ddm = self.get_ddm_from_product(prod)
+                            
+                            # Extract ingredients from database using proper relationships
+                            ingredients = self.get_ingredients_from_product(prod)
+                            
                             data_row = [
-                                prod.get('Category', ''), prod.get('Shop sku', ''), prod.get('Titre du produit', ''), 
+                                prod.get('Catégorie', ''), prod.get('Shop sku', ''), prod.get('Titre du produit', ''), 
                                 prod.get('Marque', ''), desc_cleaned, prod.get('EAN', ''), 
                                 prod.get('Couleur commercial', ''), prod.get('Image principale', ''), 
                                 prod.get('image secondaire', ''), prod.get('Image 3', ''), prod.get('Image 4', ''), 
@@ -521,9 +834,9 @@ class BazarchicDB:
                                 prod.get('Image 8', ''), prod.get('Image 9', ''), prod.get('Image_10', ''), 
                                 prod.get('Produit Parent (identification)', ''), prod.get('Id de rattachement', ''),
                                 prod.get('Composition 1', ''), prod.get('Composition 2', ''), prod.get('Composition 3', ''),
-                                prod.get('Conseil d\'entretien', ''), prod.get('Capacité', ''), prod.get('Dimensions', ''),
-                                prod.get('DLC (Date limite de consommation)', ''), prod.get('DDM (Date de durabilité minimale)', ''),
-                                prod.get('Ingrédients', ''), prod.get('Poids net du produit', ''), prod.get('Motif', ''),
+                                prod.get('Conseil d\'entretien', ''), capacity, prod.get('Dimensions', ''),
+                                dlc, ddm,
+                                ingredients, prod.get('Poids net du produit', ''), prod.get('Motif', ''),
                                 prod.get('Garantie commerciale', ''), prod.get('Eco-responsable', ''), prod.get('Métrage ? (oui /non)', ''),
                                 prod.get('Produit ou Service', ''), prod.get('BZC ( à ne pas remplir )', ''), 
                                 prod.get('Poids du colis (kg)', ''), prod.get('Taille unique', '')
