@@ -1,4 +1,3 @@
-
 """
 Bazarchic Products Database Tool
 ===============================
@@ -102,28 +101,28 @@ class BazarchicDB:
         try:
             cursor = self.connection.cursor(dictionary=True)
             
-            # Get table structure
-            cursor.execute("DESCRIBE produits")
+            # Get table structure for produits_view3
+            cursor.execute("DESCRIBE produits_view3")
             columns_info = cursor.fetchall()
             
             # Get row count
-            cursor.execute("SELECT COUNT(*) as total FROM produits")
+            cursor.execute("SELECT COUNT(*) as total FROM produits_view3")
             total_count = cursor.fetchone()['total']
             
             # Get EAN statistics
             cursor.execute("""
-                SELECT COUNT(*) as total FROM produits 
+                SELECT COUNT(*) as total FROM produits_view3 
                 WHERE ean IS NOT NULL AND ean != '' AND TRIM(ean) != ''
             """)
             ean_count = cursor.fetchone()['total']
             
             # Get sample data
-            cursor.execute("SELECT * FROM produits LIMIT 3")
+            cursor.execute("SELECT * FROM produits_view3 LIMIT 3")
             sample_products = cursor.fetchall()
             
             cursor.close()
             
-            print(f"\n📊 Products Table Analysis:")
+            print(f"\n📊 Products Table Analysis (produits_view3):")
             print("=" * 50)
             print(f"Total products: {total_count:,}")
             print(f"Products with EAN: {ean_count:,} ({ean_count/total_count*100:.1f}%)")
@@ -162,7 +161,7 @@ class BazarchicDB:
             cursor = self.connection.cursor(dictionary=True)
             
             # Get total count
-            cursor.execute("SELECT COUNT(*) as total FROM produits WHERE status = 'on'")
+            cursor.execute("SELECT COUNT(*) as total FROM produits_view3 WHERE status = 'on'")
             total_count = cursor.fetchone()['total']
             
             if max_products and max_products < total_count:
@@ -185,7 +184,7 @@ class BazarchicDB:
                 if max_products:
                     current_batch_size = min(current_batch_size, max_products - total_exported)
                 
-                query = f"SELECT * FROM produits WHERE status = 'on' LIMIT {current_batch_size} OFFSET {offset}"
+                query = f"SELECT * FROM produits_view3 WHERE status = 'on' LIMIT {current_batch_size} OFFSET {offset}"
                 cursor.execute(query)
                 products = cursor.fetchall()
                 
@@ -209,7 +208,7 @@ class BazarchicDB:
                 offset += batch_size
                 
                 progress = (total_exported / total_count) * 100
-                print(f"🔄 Progress: {total_exported:,}/{total_count:,} ({progress:.1f}%)")
+                print(f"📄 Progress: {total_exported:,}/{total_count:,} ({progress:.1f}%)")
                 
                 if max_products and total_exported >= max_products:
                     break
@@ -387,6 +386,123 @@ class BazarchicDB:
             print(f"Error extracting DLC: {e}")
             return ""
 
+    def get_weight_from_product(self, product_data):
+        """Extract Weight from product data"""
+        try:
+            product_group_id = product_data.get('product_group_id')
+            if not product_group_id:
+                return ""
+            
+            cursor = self.connection.cursor()
+
+            # Query for Poids net du produit (technical_spec_1_net_weight)
+            query = """
+            SELECT dv.valeur as weight_value
+            FROM produits_group_caracteristiques pgc
+            JOIN caracteristiques c ON pgc.idcaracteristique = c.idcaracteristique
+            JOIN dictionnaires_langues dk ON c.iddictionnaire_cle = dk.iddictionnaire
+            JOIN dictionnaires_langues dv ON c.iddictionnaire_valeur = dv.iddictionnaire
+            WHERE pgc.idproduit_group = %s
+              AND pgc.status = 'on'
+              AND c.status = 'on'
+              AND dk.valeur LIKE '%Poids%'
+            ORDER BY pgc.position
+            LIMIT 1
+            """
+            
+            cursor.execute(query, (product_group_id,))
+            result = cursor.fetchone()
+            
+            if result and result[0]:
+                dlc_value = result[0].strip()
+                cursor.close()
+                return dlc_value
+            
+            cursor.close()
+            return ""
+            
+        except Exception as e:
+            print(f"Error extracting Weight: {e}")
+            return ""
+    
+    def get_dimensions_from_product(self, product_data):
+        """Extract Dimensions from product data"""
+        try:
+            product_group_id = product_data.get('product_group_id')
+            if not product_group_id:
+                return ""
+            
+            cursor = self.connection.cursor()
+
+            # Query for Dimensions (technical_spec_1_dimensions)
+            query = """
+            SELECT dv.valeur as dimensions_value
+            FROM produits_group_caracteristiques pgc
+            JOIN caracteristiques c ON pgc.idcaracteristique = c.idcaracteristique
+            JOIN dictionnaires_langues dk ON c.iddictionnaire_cle = dk.iddictionnaire
+            JOIN dictionnaires_langues dv ON c.iddictionnaire_valeur = dv.iddictionnaire
+            WHERE pgc.idproduit_group = %s
+              AND pgc.status = 'on'
+              AND c.status = 'on'
+              AND dk.valeur LIKE '%Dimensions%'
+            ORDER BY pgc.position
+            LIMIT 1
+            """
+            
+            cursor.execute(query, (product_group_id,))
+            result = cursor.fetchone()
+            
+            if result and result[0]:
+                dlc_value = result[0].strip()
+                cursor.close()
+                return dlc_value
+            
+            cursor.close()
+            return ""
+            
+        except Exception as e:
+            print(f"Error extracting DLC: {e}")
+            return ""
+
+    def get_motif_from_product(self, product_data):
+        """Extract Motif from product data"""
+        try:
+            product_group_id = product_data.get('product_group_id')
+            if not product_group_id:
+                return ""
+            
+            cursor = self.connection.cursor()
+            
+            # Query for DDM (technical_spec_1_pattern)
+            query = """
+            SELECT dv.valeur as motif_value
+            FROM produits_group_caracteristiques pgc
+            JOIN caracteristiques c ON pgc.idcaracteristique = c.idcaracteristique
+            JOIN dictionnaires_langues dk ON c.iddictionnaire_cle = dk.iddictionnaire
+            JOIN dictionnaires_langues dv ON c.iddictionnaire_valeur = dv.iddictionnaire
+            WHERE pgc.idproduit_group = %s
+              AND pgc.status = 'on'
+              AND c.status = 'on'
+              AND dk.valeur LIKE '%Motif%'
+            ORDER BY pgc.position
+            LIMIT 1
+            """
+            
+            cursor.execute(query, (product_group_id,))
+            result = cursor.fetchone()
+            
+            if result and result[0]:
+                ddm_value = result[0].strip()
+                cursor.close()
+                return ddm_value
+            
+            cursor.close()
+            return ""
+            
+        except Exception as e:
+            print(f"Error extracting DDM: {e}")
+            return ""
+    
     def get_ddm_from_product(self, product_data):
         """Extract DDM (Date de durabilité minimale) from product data"""
         try:
@@ -427,16 +543,15 @@ class BazarchicDB:
             return ""
 
     def get_ingredients_from_product(self, product_data):
-        """Extract ingredients from product data using the proper database structure as per PDF documentation"""
+        """"Extract ingredients from product data using the proper database structure as per PDF documentation"""
+        cursor = None
         try:
             product_group_id = product_data.get('product_group_id')
-            if not product_group_id:
+            if not product_group_id or product_group_id == 0:
                 return ""
             
             cursor = self.connection.cursor()
             
-            # Use the proper structure: produits_group_caracteristiques -> caracteristiques -> dictionnaires_langues
-            # Looking for characteristics where the key is "Ingrédients" or similar
             query = """
             SELECT dv.valeur
             FROM produits_group_caracteristiques pgc
@@ -456,81 +571,188 @@ class BazarchicDB:
             LIMIT 1
             """
             
-            cursor.execute(query, (product_group_id,))
+            cursor.execute(query, (int(product_group_id),))
             result = cursor.fetchone()
             
             if result and result[0]:
-                ingredients_text = result[0].strip()
-                # Clean up the ingredients text
-                ingredients_text = ingredients_text.replace('\n', ' ').replace('\r', ' ')
-                ingredients_text = ingredients_text.replace('  ', ' ')  # Remove double spaces
-                
-                # Limit length for CSV compatibility
-                if len(ingredients_text) > 800:
-                    ingredients_text = ingredients_text[:800] + "..."
-                
-                cursor.close()
-                return ingredients_text
+                care_text = result[0].strip()
+                care_text = care_text.replace('\n', ' ').replace('\r', ' ')
+                care_text = care_text.replace('  ', ' ')
+                if len(care_text) > 1000:
+                    care_text = care_text[:1000] + "..."
+                return care_text
             
-            # Fallback: try to get from general dictionary search for cosmetic ingredients
-            fallback_query = """
-            SELECT dl.valeur 
-            FROM dictionnaires_langues dl
-            WHERE dl.valeur LIKE '%Aqua%' 
-                AND dl.valeur LIKE '%glyc%'
-                AND LENGTH(dl.valeur) > 100
-                AND (dl.valeur LIKE '%Water%' OR dl.valeur LIKE '%Parfum%' OR dl.valeur LIKE '%Alcohol%')
-                AND dl.status = 'on'
-            LIMIT 1
-            """
-            
-            cursor.execute(fallback_query)
-            fallback_result = cursor.fetchone()
-            
-            if fallback_result and fallback_result[0]:
-                ingredients_text = fallback_result[0].strip()
-                ingredients_text = ingredients_text.replace('\n', ' ').replace('\r', ' ')
-                if len(ingredients_text) > 800:
-                    ingredients_text = ingredients_text[:800] + "..."
-                cursor.close()
-                return ingredients_text
-            
-            cursor.close()
             return ""
             
         except Exception as e:
             print(f"Error extracting ingredients: {e}")
             return ""
+        finally:
+            if cursor:
+                cursor.close()
+
+    def get_color_from_product(self, product_data):
+        """"Extract color from product data using the proper database structure as per PDF documentation"""
+        cursor = None
+        try:
+            product_group_id = product_data.get('product_group_id')
+            if not product_group_id or product_group_id == 0:
+                return ""
+            
+            cursor = self.connection.cursor()
+            
+            query = """
+            SELECT dv.valeur
+            FROM produits_group_caracteristiques pgc
+            JOIN caracteristiques c ON pgc.idcaracteristique = c.idcaracteristique
+            JOIN dictionnaires_langues dk ON c.iddictionnaire_cle = dk.iddictionnaire
+            JOIN dictionnaires_langues dv ON c.iddictionnaire_valeur = dv.iddictionnaire
+            WHERE pgc.idproduit_group = %s
+              AND pgc.status = 'on'
+              AND c.status = 'on'
+              AND (dk.valeur = 'Couleurs' 
+                   OR dk.valeur = 'Couleur')
+              AND dv.valeur IS NOT NULL
+              AND LENGTH(dv.valeur) > 20
+            ORDER BY pgc.position
+            LIMIT 1
+            """
+            
+            cursor.execute(query, (int(product_group_id),))
+            result = cursor.fetchone()
+            
+            if result and result[0]:
+                care_text = result[0].strip()
+                care_text = care_text.replace('\n', ' ').replace('\r', ' ')
+                care_text = care_text.replace('  ', ' ')
+                if len(care_text) > 500:
+                    care_text = care_text[:500] + "..."
+                return care_text
+            
+            return ""
+            
+        except Exception as e:
+            print(f"Error extracting care color: {e}")
+            return ""
+        finally:
+            if cursor:
+                cursor.close()
+
+    def get_care_advice_from_product(self, product_data):
+        """Extract care advice from product data"""
+        cursor = None
+        try:
+            product_group_id = product_data.get('product_group_id')
+            if not product_group_id or product_group_id == 0:
+                return ""
+            
+            cursor = self.connection.cursor()
+            
+            query = """
+            SELECT dv.valeur
+            FROM produits_group_caracteristiques pgc
+            JOIN caracteristiques c ON pgc.idcaracteristique = c.idcaracteristique
+            JOIN dictionnaires_langues dk ON c.iddictionnaire_cle = dk.iddictionnaire
+            JOIN dictionnaires_langues dv ON c.iddictionnaire_valeur = dv.iddictionnaire
+            WHERE pgc.idproduit_group = %s
+              AND pgc.status = 'on'
+              AND c.status = 'on'
+              AND dk.valeur = 'Conseil d''entretien'
+              AND dv.valeur IS NOT NULL
+              AND LENGTH(dv.valeur) > 10
+            ORDER BY pgc.position
+            LIMIT 1
+            """
+            
+            cursor.execute(query, (int(product_group_id),))
+            result = cursor.fetchone()
+            
+            if result and result[0]:
+                care_text = result[0].strip()
+                care_text = care_text.replace('\n', ' ').replace('\r', ' ')
+                care_text = care_text.replace('  ', ' ')
+                if len(care_text) > 500:
+                    care_text = care_text[:500] + "..."
+                return care_text
+            
+            return ""
+            
+        except Exception as e:
+            print(f"Error extracting care advice: {e}")
+            return ""
+        finally:
+            if cursor:
+                cursor.close()
+    
+    def get_composition_from_product(self, product_data, composition_number=1):
+        """Extract composition fields from product data"""
+        try:
+            product_group_id = product_data.get('product_group_id')
+            if not product_group_id:
+                return ""
+            
+            cursor = self.connection.cursor()
+            
+            query = """
+            SELECT dv.valeur
+            FROM produits_group_caracteristiques pgc
+            JOIN caracteristiques c ON pgc.idcaracteristique = c.idcaracteristique
+            JOIN dictionnaires_langues dk ON c.iddictionnaire_cle = dk.iddictionnaire
+            JOIN dictionnaires_langues dv ON c.iddictionnaire_valeur = dv.iddictionnaire
+            WHERE pgc.idproduit_group = %s
+            AND pgc.status = 'on'
+            AND c.status = 'on'
+            AND dk.valeur LIKE '%Composition%'
+            AND dv.valeur IS NOT NULL
+            AND LENGTH(dv.valeur) > 5
+            ORDER BY pgc.position
+            LIMIT 3
+            """
+            
+            cursor.execute(query, (product_group_id,))
+            results = cursor.fetchall()
+            
+            if results and len(results) >= composition_number:
+                comp_text = results[composition_number - 1][0].strip()
+                comp_text = comp_text.replace('\n', ' ').replace('\r', ' ')
+                comp_text = comp_text.replace('  ', ' ')
+                if len(comp_text) > 200:
+                    comp_text = comp_text[:200] + "..."
+                cursor.close()
+                return comp_text
+            
+            cursor.close()
+            return ""
+            
+        except Exception as e:
+            print(f"Error extracting composition {composition_number}: {e}")
+            return ""
 
     def export_comprehensive_csv(self, limit=None, ean_filter=None):
-        """Export products with comprehensive data and DEEP database relationships"""
+        """Export products with comprehensive data and DEEP database relationships
+        Creates separate CSV files for found and not found EANs when searching by EAN"""
         try:
-            # Enhanced comprehensive query with DEEP JOINs
+            # Enhanced comprehensive query with DEEP JOINs using produits_view3
             base_query = """
             SELECT 
                 -- Category (from categories table via idrows)
-                -- Category/family name - fixed to show Cosmétiques/Soins
                 '' as 'Catégorie',
                 
                 -- Shop SKU (product reference)
                 p.ref as 'Shop sku',
                 
-                -- Product Title (from produits_group table for REAL names)
+                -- Product Title (use nom_fr from view, fallback to keywords)
                 CASE 
-                    WHEN pg.nom_fr != '' AND pg.nom_fr IS NOT NULL THEN pg.nom_fr
+                    WHEN p.nom_fr != '' AND p.nom_fr IS NOT NULL THEN p.nom_fr
                     WHEN p.keywords != '' AND p.keywords IS NOT NULL THEN p.keywords
-                    WHEN p.desc_fastmag != '' AND p.desc_fastmag IS NOT NULL THEN p.desc_fastmag
                     ELSE CONCAT('Produit ', p.idproduit)
                 END as 'Titre du produit',
                 
-                -- Brand (from produits_marque table for REAL brand names)
-                COALESCE(pm.marque_fr, 'Marque inconnue') as 'Marque',
+                -- Brand (marque_fr is directly in the view)
+                COALESCE(p.marque_fr, 'Marque inconnue') as 'Marque',
                 
-                -- Long Description (prioritize produits_group description)
-                CASE 
-                    WHEN pg.description_fr != '' AND pg.description_fr IS NOT NULL THEN pg.description_fr
-                    ELSE COALESCE(p.description_fr, '')
-                END as 'Description Longue',
+                -- Long Description (description_fr is directly in the view)
+                COALESCE(p.description_fr, '') as 'Description Longue',
                 
                 -- EAN code
                 COALESCE(p.ean, '') as 'EAN',
@@ -595,8 +817,8 @@ class BazarchicDB:
                     ELSE 'Non' 
                 END as 'Produit Parent (identification)',
                 
-                -- Attachment ID (variant group code)
-                COALESCE(p.variant_group_code, '') as 'Id de rattachement',
+                -- Attachment ID (variant group code - need to get from produits_group)
+                '' as 'Id de rattachement',
                 
                 -- Composition fields (empty, would need additional product detail tables)
                 '' as 'Composition 1',
@@ -615,7 +837,7 @@ class BazarchicDB:
                 '' as 'DDM (Date de durabilité minimale)',  -- Will be filled by Python logic
                 
                 -- Ingredients from database - will be filled by Python logic  
-                pg.idproduit_group as 'product_group_id',
+                p.idproduit_group as 'product_group_id',
                 '' as 'Ingrédients',
                 
                 -- Net weight (from poids field)
@@ -648,29 +870,30 @@ class BazarchicDB:
                 -- Package weight (from poids)
                 COALESCE(p.poids, 0) as 'Poids du colis (kg)',
                 
-                -- Size (default)
-                'Taille Unique' as 'Taille unique',
+                -- Size from cols column with T.U. = "Taille Unique" condition
+                CASE
+                    WHEN p.cols IN ('T.U.', 'T.U') THEN 'Taille Unique'
+                    WHEN p.cols LIKE 'T.%' THEN SUBSTRING(p.cols, 3) 
+                    WHEN p.cols IS NULL OR p.cols = '' THEN ''   
+                    ELSE p.cols
+                END AS `Taille unique`,
                 
                 -- Additional data for Python processing
-                pg.nom_fr as 'product_name_for_capacity',
-                pg.description_fr as 'description_for_specs',
-                pf.is_dlc as 'has_dlc_flag'
+                p.nom_fr as 'product_name_for_capacity',
+                p.description_fr as 'description_for_specs',
+                '' as 'has_dlc_flag'
                 
-            FROM produits p
-            LEFT JOIN categories c ON p.idrows = c.idcat
-            LEFT JOIN produits_group pg ON p.idproduit_group = pg.idproduit_group
-            LEFT JOIN produits_marque pm ON pg.idmarque = pm.idmarque
-            LEFT JOIN produits_familles pf ON pg.idfamille = pf.idfamille
-            LEFT JOIN produits_gallery g1 ON pg.idproduit_group = g1.idproduit_group AND g1.position = 0 AND g1.status = 'on'
-            LEFT JOIN produits_gallery g2 ON pg.idproduit_group = g2.idproduit_group AND g2.position = 1 AND g2.status = 'on'
-            LEFT JOIN produits_gallery g3 ON pg.idproduit_group = g3.idproduit_group AND g3.position = 2 AND g3.status = 'on'
-            LEFT JOIN produits_gallery g4 ON pg.idproduit_group = g4.idproduit_group AND g4.position = 3 AND g4.status = 'on'
-            LEFT JOIN produits_gallery g5 ON pg.idproduit_group = g5.idproduit_group AND g5.position = 4 AND g5.status = 'on'
-            LEFT JOIN produits_gallery g6 ON pg.idproduit_group = g6.idproduit_group AND g6.position = 5 AND g6.status = 'on'
-            LEFT JOIN produits_gallery g7 ON pg.idproduit_group = g7.idproduit_group AND g7.position = 6 AND g7.status = 'on'
-            LEFT JOIN produits_gallery g8 ON pg.idproduit_group = g8.idproduit_group AND g8.position = 7 AND g8.status = 'on'
-            LEFT JOIN produits_gallery g9 ON pg.idproduit_group = g9.idproduit_group AND g9.position = 8 AND g9.status = 'on'
-            LEFT JOIN produits_gallery g10 ON pg.idproduit_group = g10.idproduit_group AND g10.position = 9 AND g10.status = 'on'
+            FROM produits_view3 p
+            LEFT JOIN produits_gallery g1 ON p.idproduit_group = g1.idproduit_group AND g1.position = 0 AND g1.status = 'on'
+            LEFT JOIN produits_gallery g2 ON p.idproduit_group = g2.idproduit_group AND g2.position = 1 AND g2.status = 'on'
+            LEFT JOIN produits_gallery g3 ON p.idproduit_group = g3.idproduit_group AND g3.position = 2 AND g3.status = 'on'
+            LEFT JOIN produits_gallery g4 ON p.idproduit_group = g4.idproduit_group AND g4.position = 3 AND g4.status = 'on'
+            LEFT JOIN produits_gallery g5 ON p.idproduit_group = g5.idproduit_group AND g5.position = 4 AND g5.status = 'on'
+            LEFT JOIN produits_gallery g6 ON p.idproduit_group = g6.idproduit_group AND g6.position = 5 AND g6.status = 'on'
+            LEFT JOIN produits_gallery g7 ON p.idproduit_group = g7.idproduit_group AND g7.position = 6 AND g7.status = 'on'
+            LEFT JOIN produits_gallery g8 ON p.idproduit_group = g8.idproduit_group AND g8.position = 7 AND g8.status = 'on'
+            LEFT JOIN produits_gallery g9 ON p.idproduit_group = g9.idproduit_group AND g9.position = 8 AND g9.status = 'on'
+            LEFT JOIN produits_gallery g10 ON p.idproduit_group = g10.idproduit_group AND g10.position = 9 AND g10.status = 'on'
             WHERE p.status = 'on'
             """
             
@@ -729,139 +952,166 @@ class BazarchicDB:
                 'is_virtual', 'is_bzc', 'weight', 'size_id'
             ]
             
-            # Generate filename
-            if ean_filter:
-                filename = f"comprehensive_ean_products_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-            else:
-                filename = f"comprehensive_products_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            def write_product_row(prod, writer):
+                """Helper function to write a product row"""
+                # Clean HTML from description
+                desc_cleaned = clean_html(prod.get('Description Longue', ''))
+                
+                # Extract capacity from database using proper relationships
+                capacity = self.get_capacity_from_product(prod)
+                # Fallback to text extraction if no database capacity found
+                if not capacity:
+                    capacity = self.extract_capacity_from_text(prod.get('product_name_for_capacity', ''))
+                    if not capacity:
+                        capacity = self.extract_capacity_from_text(desc_cleaned)
+                
+                # Extract dimensions from database using proper relationships
+                dimensions = self.get_dimensions_from_product(prod)
+
+                #Extract weight from database using proper relationships
+                weight = self.get_weight_from_product(prod)
+
+                #Extract color from database using proper relationships
+                color = self.get_color_from_product(prod)
+
+                #Extract motif from database using proper relationships
+                motif = self.get_motif_from_product(prod)
+
+                # Extract DLC and DDM from database using proper relationships
+                dlc = self.get_dlc_from_product(prod)
+                ddm = self.get_ddm_from_product(prod)
+                
+                # Extract ingredients from database using proper relationships
+                ingredients = self.get_ingredients_from_product(prod)
+                
+                # Extract care advice
+                care_advice = self.get_care_advice_from_product(prod)
+                
+                # Extract compositions
+                composition1 = self.get_composition_from_product(prod, 1)
+                composition2 = self.get_composition_from_product(prod, 2)
+                composition3 = self.get_composition_from_product(prod, 3)
+                
+                # Size is already handled in SQL query
+                size = prod.get('Taille unique', 'Taille Unique')
+                
+                data_row = [
+                    prod.get('Catégorie', ''), prod.get('Shop sku', ''), prod.get('Titre du produit', ''), 
+                    prod.get('Marque', ''), desc_cleaned, prod.get('EAN', ''), 
+                    color, prod.get('Image principale', ''), 
+                    prod.get('image secondaire', ''), prod.get('Image 3', ''), prod.get('Image 4', ''), 
+                    prod.get('Image 5', ''), prod.get('Image 6', ''), prod.get('Image 7', ''), 
+                    prod.get('Image 8', ''), prod.get('Image 9', ''), prod.get('Image_10', ''), 
+                    prod.get('Produit Parent (identification)', ''), prod.get('Id de rattachement', ''),
+                    composition1, composition2, composition3,
+                    care_advice, capacity, dimensions,
+                    dlc, ddm,
+                    ingredients, weight, motif,
+                    prod.get('Garantie commerciale', ''), prod.get('Eco-responsable', ''), prod.get('Métrage ? (oui /non)', ''),
+                    prod.get('Produit ou Service', ''), prod.get('BZC ( à ne pas remplir )', ''), 
+                    prod.get('Poids du colis (kg)', ''), size
+                ]
+                writer.writerow(data_row)
             
-            # Export to CSV with UTF-8 encoding and custom header format
-            with open(filename, 'w', encoding='utf-8', newline='') as f:
+            # Generate filenames
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            
+            # Handle EAN filter case - create TWO separate files
+            if ean_filter and clean_eans:
+                filename_found = f"comprehensive_ean_FOUND_{timestamp}.csv"
+                filename_not_found = f"comprehensive_ean_NOT_FOUND_{timestamp}.csv"
+                
+                # Map found products by EAN
+                found_by_ean = {}
+                for prod in products:
+                    ean_key = prod.get('EAN', '')
+                    if ean_key not in found_by_ean:
+                        found_by_ean[ean_key] = []
+                    found_by_ean[ean_key].append(prod)
+                
+                # Track statistics
+                found_eans = []
+                not_found_eans = []
+                
+                # Write FOUND products file
                 import csv
-                writer = csv.writer(f)
-                
-                # Write the display headers (first row)
-                writer.writerow(display_headers)
-                
-                # Write the technical field mappings (second row)
-                writer.writerow(technical_mappings)
-                
-                # Handle EAN filter case - write row for each searched EAN
-                if ean_filter and clean_eans:
-                    # Map found products by EAN
-                    found_by_ean = {}
-                    for prod in products:
-                        ean_key = prod.get('EAN', '')
-                        if ean_key not in found_by_ean:
-                            found_by_ean[ean_key] = []
-                        found_by_ean[ean_key].append(prod)
+                with open(filename_found, 'w', encoding='utf-8', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(display_headers)
+                    writer.writerow(technical_mappings)
                     
-                    # Write row for each searched EAN
                     for ean in clean_eans:
                         if ean in found_by_ean:
-                            # Found products for this EAN
+                            found_eans.append(ean)
                             for prod in found_by_ean[ean]:
-                                # Clean HTML from description
-                                desc_cleaned = clean_html(prod.get('Description Longue', ''))
-                                
-                                # Extract capacity from database using proper relationships
-                                capacity = self.get_capacity_from_product(prod)
-                                # Fallback to text extraction if no database capacity found
-                                if not capacity:
-                                    capacity = self.extract_capacity_from_text(prod.get('product_name_for_capacity', ''))
-                                    if not capacity:
-                                        capacity = self.extract_capacity_from_text(desc_cleaned)
-                                
-                                # Extract DLC and DDM from database using proper relationships
-                                dlc = self.get_dlc_from_product(prod)
-                                ddm = self.get_ddm_from_product(prod)
-                                
-                                # Extract ingredients from database using proper relationships
-                                ingredients = self.get_ingredients_from_product(prod)
-                                
-                                data_row = [
-                                    prod.get('Catégorie', ''), prod.get('Shop sku', ''), prod.get('Titre du produit', ''), 
-                                    prod.get('Marque', ''), desc_cleaned, prod.get('EAN', ''), 
-                                    prod.get('Couleur commercial', ''), prod.get('Image principale', ''), 
-                                    prod.get('image secondaire', ''), prod.get('Image 3', ''), prod.get('Image 4', ''), 
-                                    prod.get('Image 5', ''), prod.get('Image 6', ''), prod.get('Image 7', ''), 
-                                    prod.get('Image 8', ''), prod.get('Image 9', ''), prod.get('Image_10', ''), 
-                                    prod.get('Produit Parent (identification)', ''), prod.get('Id de rattachement', ''),
-                                    prod.get('Composition 1', ''), prod.get('Composition 2', ''), prod.get('Composition 3', ''),
-                                    prod.get('Conseil d\'entretien', ''), capacity, prod.get('Dimensions', ''),
-                                    dlc, ddm,
-                                    ingredients, prod.get('Poids net du produit', ''), prod.get('Motif', ''),
-                                    prod.get('Garantie commerciale', ''), prod.get('Eco-responsable', ''), prod.get('Métrage ? (oui /non)', ''),
-                                    prod.get('Produit ou Service', ''), prod.get('BZC ( à ne pas remplir )', ''), 
-                                    prod.get('Poids du colis (kg)', ''), prod.get('Taille unique', '')
-                                ]
-                                writer.writerow(data_row)
-                        else:
-                            # No product found for this EAN - write empty row with only EAN and Category
+                                write_product_row(prod, writer)
+                
+                # Write NOT FOUND products file
+                with open(filename_not_found, 'w', encoding='utf-8', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(display_headers)
+                    writer.writerow(technical_mappings)
+                    
+                    for ean in clean_eans:
+                        if ean not in found_by_ean:
+                            not_found_eans.append(ean)
+                            # Write empty row with only EAN and Category
                             empty_row = ['' for _ in display_headers]
-                            empty_row[0] = ''  # Set Category (first column)
-                            empty_row[display_headers.index('EAN')] = ean  # Set EAN in the correct position
+                            empty_row[0] = ''  # Category
+                            empty_row[display_headers.index('EAN')] = ean  # EAN
                             writer.writerow(empty_row)
                 
-                else:
-                    # Regular export (no EAN filter) or found products
+                # Calculate file sizes
+                file_size_found = os.path.getsize(filename_found) / 1024 / 1024
+                file_size_not_found = os.path.getsize(filename_not_found) / 1024 / 1024
+                
+                print(f"\n✅ Comprehensive CSV export completed!")
+                print("=" * 60)
+                print(f"📁 FOUND Products File: {filename_found}")
+                print(f"   📊 EANs found: {len(found_eans)}")
+                print(f"   📊 Products exported: {total_exported:,}")
+                print(f"   💾 File size: {file_size_found:.2f} MB")
+                print()
+                print(f"📁 NOT FOUND Products File: {filename_not_found}")
+                print(f"   📊 EANs not found: {len(not_found_eans)}")
+                print(f"   💾 File size: {file_size_not_found:.2f} MB")
+                print()
+                print(f"📋 Summary:")
+                print(f"   Total EANs searched: {len(clean_eans)}")
+                print(f"   Found: {len(found_eans)} ({len(found_eans)/len(clean_eans)*100:.1f}%)")
+                print(f"   Not Found: {len(not_found_eans)} ({len(not_found_eans)/len(clean_eans)*100:.1f}%)")
+                
+                return (filename_found, filename_not_found), (len(found_eans), len(not_found_eans))
+            
+            else:
+                # Regular export (no EAN filter)
+                filename = f"comprehensive_products_{timestamp}.csv"
+                
+                import csv
+                with open(filename, 'w', encoding='utf-8', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(display_headers)
+                    writer.writerow(technical_mappings)
+                    
                     if products:
                         for prod in products:
-                            # Clean HTML from description
-                            desc_cleaned = clean_html(prod.get('Description Longue', ''))
-                            
-                            # Extract capacity from database using proper relationships
-                            capacity = self.get_capacity_from_product(prod)
-                            # Fallback to text extraction if no database capacity found
-                            if not capacity:
-                                capacity = self.extract_capacity_from_text(prod.get('product_name_for_capacity', ''))
-                                if not capacity:
-                                    capacity = self.extract_capacity_from_text(desc_cleaned)
-                            
-                            # Extract DLC and DDM from database using proper relationships
-                            dlc = self.get_dlc_from_product(prod)
-                            ddm = self.get_ddm_from_product(prod)
-                            
-                            # Extract ingredients from database using proper relationships
-                            ingredients = self.get_ingredients_from_product(prod)
-                            
-                            data_row = [
-                                prod.get('Catégorie', ''), prod.get('Shop sku', ''), prod.get('Titre du produit', ''), 
-                                prod.get('Marque', ''), desc_cleaned, prod.get('EAN', ''), 
-                                prod.get('Couleur commercial', ''), prod.get('Image principale', ''), 
-                                prod.get('image secondaire', ''), prod.get('Image 3', ''), prod.get('Image 4', ''), 
-                                prod.get('Image 5', ''), prod.get('Image 6', ''), prod.get('Image 7', ''), 
-                                prod.get('Image 8', ''), prod.get('Image 9', ''), prod.get('Image_10', ''), 
-                                prod.get('Produit Parent (identification)', ''), prod.get('Id de rattachement', ''),
-                                prod.get('Composition 1', ''), prod.get('Composition 2', ''), prod.get('Composition 3', ''),
-                                prod.get('Conseil d\'entretien', ''), capacity, prod.get('Dimensions', ''),
-                                dlc, ddm,
-                                ingredients, prod.get('Poids net du produit', ''), prod.get('Motif', ''),
-                                prod.get('Garantie commerciale', ''), prod.get('Eco-responsable', ''), prod.get('Métrage ? (oui /non)', ''),
-                                prod.get('Produit ou Service', ''), prod.get('BZC ( à ne pas remplir )', ''), 
-                                prod.get('Poids du colis (kg)', ''), prod.get('Taille unique', '')
-                            ]
-                            writer.writerow(data_row)
-            
-            file_size = os.path.getsize(filename) / 1024 / 1024
-            
-            print(f"\n✅ Comprehensive CSV export completed!")
-            print("=" * 60)
-            print(f"📁 File: {filename}")
-            if ean_filter and clean_eans:
-                print(f"📊 Searched EANs: {len(clean_eans)}")
-                print(f"📊 Products found: {total_exported:,}")
-            else:
+                            write_product_row(prod, writer)
+                
+                file_size = os.path.getsize(filename) / 1024 / 1024
+                
+                print(f"\n✅ Comprehensive CSV export completed!")
+                print("=" * 60)
+                print(f"📁 File: {filename}")
                 print(f"📊 Products exported: {total_exported:,}")
-            print(f"💾 File size: {file_size:.2f} MB") 
-            print(f"📋 Columns: {len(display_headers)} (exactly as requested)")
-            
-            return filename, total_exported if not ean_filter else len(clean_eans)
+                print(f"💾 File size: {file_size:.2f} MB") 
+                print(f"📋 Columns: {len(display_headers)} (exactly as requested)")
+                
+                return filename, total_exported
                 
         except Exception as e:
             print(f"❌ Export error: {e}")
             return None, 0
-    
+
     def search_products_by_ean(self, ean_codes):
         """Search products by EAN codes and export to CSV"""
         try:
@@ -886,7 +1136,7 @@ class BazarchicDB:
                 print(f"Searching EAN: {ean}")
                 
                 # Try exact match first
-                cursor.execute("SELECT * FROM produits WHERE ean = %s", (ean,))
+                cursor.execute("SELECT * FROM produits_view3 WHERE ean = %s", (ean,))
                 exact_matches = cursor.fetchall()
                 
                 if exact_matches:
@@ -894,7 +1144,7 @@ class BazarchicDB:
                     all_products.extend(exact_matches)
                 else:
                     # Try partial match
-                    cursor.execute("SELECT * FROM produits WHERE TRIM(ean) LIKE %s", (f"%{ean}%",))
+                    cursor.execute("SELECT * FROM produits_view3 WHERE TRIM(ean) LIKE %s", (f"%{ean}%",))
                     partial_matches = cursor.fetchall()
                     
                     if partial_matches:
@@ -980,20 +1230,20 @@ def main():
                 break
             
             elif choice == "1":
-                print("\n🔄 Listing all database tables...")
+                print("\n📄 Listing all database tables...")
                 tables = db.list_all_tables()
                 
             elif choice == "2":
-                print("\n🔄 Analyzing products table...")
+                print("\n📄 Analyzing products table...")
                 info = db.get_products_table_info()
                 
             elif choice == "3":
-                print("\n⚠️  WARNING: This will export ALL products (8M+)")
+                print("\n⚠️ WARNING: This will export ALL products (8M+)")
                 print("This may take several hours and create a very large file (1-3 GB)")
                 confirm = input("Are you sure? Type 'yes' to confirm: ").lower().strip()
                 
                 if confirm == "yes":
-                    print("\n🔄 Starting full export...")
+                    print("\n📄 Starting full export...")
                     filename, count = db.export_all_products_csv(batch_size=50000)
                     
                     if filename:
@@ -1002,7 +1252,7 @@ def main():
                     print("❌ Export cancelled")
             
             elif choice == "4":
-                print("\n🔄 Exporting sample products (10,000 products, original format)...")
+                print("\n📄 Exporting sample products (10,000 products, original format)...")
                 filename, count = db.export_all_products_csv(
                     batch_size=5000, 
                     max_products=10000
@@ -1055,12 +1305,12 @@ def main():
             
             elif choice == "6":
                 print("\n🎯 COMPREHENSIVE EXPORT with your exact headers!")
-                print("⚠️  WARNING: This will export ALL products with comprehensive data")
+                print("⚠️ WARNING: This will export ALL products with comprehensive data")
                 print("This creates a CSV with exactly 37 columns as you requested")
                 confirm = input("Continue? Type 'yes' to confirm: ").lower().strip()
                 
                 if confirm == "yes":
-                    print("\n🔄 Starting comprehensive full export...")
+                    print("\n📄 Starting comprehensive full export...")
                     filename, count = db.export_comprehensive_csv()
                     
                     if filename:
@@ -1086,9 +1336,18 @@ def main():
                 if search_choice == "a":
                     ean = input("Enter EAN code: ").strip()
                     if ean:
-                        filename, count = db.export_comprehensive_csv(ean_filter=[ean])
-                        if count > 0:
-                            print(f"🎉 Found and exported {count} product(s) with comprehensive data")
+                        result = db.export_comprehensive_csv(ean_filter=[ean])
+                        # Handle tuple return (filenames, counts)
+                        if result and result[0]:
+                            if isinstance(result[0], tuple):
+                                # Two files returned (found and not found)
+                                filenames, counts = result
+                                found_count, not_found_count = counts
+                                print(f"🎉 Export completed with {found_count} found and {not_found_count} not found")
+                            else:
+                                # Single file returned
+                                filename, count = result
+                                print(f"🎉 Found and exported {count} product(s)")
                     else:
                         print("❌ No EAN code provided")
                 
@@ -1096,9 +1355,18 @@ def main():
                     eans_input = input("Enter EAN codes (comma-separated): ").strip()
                     if eans_input:
                         eans = [ean.strip() for ean in eans_input.split(',')]
-                        filename, count = db.export_comprehensive_csv(ean_filter=eans)
-                        if count > 0:
-                            print(f"🎉 Found and exported {count} product(s) with comprehensive data")
+                        result = db.export_comprehensive_csv(ean_filter=eans)
+                        # Handle tuple return (filenames, counts)
+                        if result and result[0]:
+                            if isinstance(result[0], tuple):
+                                # Two files returned (found and not found)
+                                filenames, counts = result
+                                found_count, not_found_count = counts
+                                print(f"🎉 Export completed with {found_count} found and {not_found_count} not found")
+                            else:
+                                # Single file returned
+                                filename, count = result
+                                print(f"🎉 Found and exported {count} product(s)")
                     else:
                         print("❌ No EAN codes provided")
                 
@@ -1111,9 +1379,18 @@ def main():
                             
                             if eans:
                                 print(f"✅ Loaded {len(eans)} EAN codes from file")
-                                filename, count = db.export_comprehensive_csv(ean_filter=eans)
-                                if count > 0:
-                                    print(f"🎉 Found and exported {count} product(s) with comprehensive data")
+                                result = db.export_comprehensive_csv(ean_filter=eans)
+                                # Handle tuple return (filenames, counts)
+                                if result and result[0]:
+                                    if isinstance(result[0], tuple):
+                                        # Two files returned (found and not found)
+                                        filenames, counts = result
+                                        found_count, not_found_count = counts
+                                        print(f"🎉 Export completed with {found_count} found and {not_found_count} not found")
+                                    else:
+                                        # Single file returned
+                                        filename, count = result
+                                        print(f"🎉 Found and exported {count} product(s)")
                             else:
                                 print("❌ No valid EAN codes found in file")
                         except Exception as e:
@@ -1122,7 +1399,7 @@ def main():
                         print("❌ File not found")
                 else:
                     print("❌ Invalid search option")
-            
+
             else:
                 print("❌ Invalid option. Please select 0-8.")
         
